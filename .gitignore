@@ -3,3 +3,19 @@ dist
 .env
 *.log
 .DS_Store
+
+# Local environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Private TLS certificates and keys
+*.pem
+*.key
+*.crt
+
+# Dependencies and build output
+node_modules
+dist
+*.log
+.DS_Store
