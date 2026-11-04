@@ -69,6 +69,3 @@ CREATE TABLE IF NOT EXISTS return_items (
   CONSTRAINT fk_return_items_return FOREIGN KEY (return_id) REFERENCES returns(id),
   CONSTRAINT fk_return_items_product FOREIGN KEY (product_id) REFERENCES products(id)
 );
-CREATE INDEX idx_purchases_created ON purchases(created_at);
-CREATE INDEX idx_sales_created ON sales(created_at);
-CREATE INDEX idx_returns_created ON returns(created_at);
