@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import authRoutes, { auth, roles } from "./auth.js";
 import { pool } from "./db.js";
@@ -30,6 +31,48 @@ app.get("/api/health", asyncRoute(async (_req, res) => {
   await pool.query("SELECT 1");
   res.json({ status: "ok", database: "connected" });
 }));
+
+const publicReadLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false });
+app.use("/api/public", publicReadLimiter);
+
+// Public parent portal: read-only inventory information. Never return prices, users, suppliers or audit data.
+app.get("/api/public/summary", asyncRoute(async (_req, res) => {
+  const [[totals]] = await pool.query(`
+    SELECT COUNT(*) AS products,
+      COALESCE(SUM(stock_quantity > 0 AND stock_quantity <= min_quantity), 0) AS lowStock,
+      COALESCE(SUM(stock_quantity <= 0), 0) AS outOfStock,
+      COALESCE(SUM(stock_quantity > min_quantity), 0) AS healthyStock
+    FROM (
+      SELECT p.id, p.min_quantity,
+        COALESCE(SUM(CASE WHEN sm.movement_type='IN' THEN sm.quantity WHEN sm.movement_type='OUT' THEN -sm.quantity ELSE 0 END), 0) AS stock_quantity
+      FROM products p
+      LEFT JOIN stock_movements sm ON sm.product_id = p.id
+      WHERE p.active = 1
+      GROUP BY p.id, p.min_quantity
+    ) inventory
+  `);
+  res.json({
+    products: Number(totals.products),
+    lowStock: Number(totals.lowStock),
+    outOfStock: Number(totals.outOfStock),
+    healthyStock: Number(totals.healthyStock)
+  });
+}));
+
+app.get("/api/public/products", asyncRoute(async (_req, res) => {
+  const [rows] = await pool.query(`
+    SELECT p.id, p.name, p.sku, p.unit, c.name AS category_name, p.min_quantity,
+      COALESCE(SUM(CASE WHEN sm.movement_type='IN' THEN sm.quantity WHEN sm.movement_type='OUT' THEN -sm.quantity ELSE 0 END), 0) AS stock_quantity
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.category_id
+    LEFT JOIN stock_movements sm ON sm.product_id = p.id
+    WHERE p.active = 1
+    GROUP BY p.id, c.name
+    ORDER BY p.name
+  `);
+  res.json(rows);
+}));
+
 app.use("/api/auth", authRoutes);
 app.use("/api", moduleRoutes);
 
