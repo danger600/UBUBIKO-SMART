@@ -30,6 +30,38 @@ const copy = {
   }
 };
 const emptySummary:Summary = {products:0,lowStock:0,outOfStock:0,healthyStock:0};
+type ChatMessage = { role:"user"|"assistant"; content:string };
+function ParentChat({lang}:{lang:Language}) {
+  const [open,setOpen]=useState(false);
+  const [input,setInput]=useState("");
+  const [sending,setSending]=useState(false);
+  const [messages,setMessages]=useState<ChatMessage[]>([]);
+  const welcome=lang==="rw"?"Muraho! Ndi umufasha wa UBUBIKO SMART. Nakugirira akahe kamaro?":"Hello! I'm the UBUBIKO SMART assistant. How can I help?";
+  async function send() {
+    const text=input.trim();
+    if(!text||sending)return;
+    const next=[...messages,{role:"user" as const,content:text}];
+    setMessages(next);setInput("");setSending(true);
+    try {
+      const response=await fetch(API+"/public/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:text,history:messages.slice(-8)})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.message||"Chat unavailable");
+      setMessages([...next,{role:"assistant",content:data.reply}]);
+    } catch(error) {
+      const message=error instanceof Error?error.message:"Connection error";
+      setMessages([...next,{role:"assistant",content:lang==="rw"?"Mbabarira, umufasha ntaraboneka. Ongera ugerageze nyuma.":"Sorry, the assistant is unavailable right now. Please try again later."+(message.includes("not configured")?" (AI key not configured.)":"")}]);
+    } finally {setSending(false);}
+  }
+  return <div className="chat-widget">
+    {open&&<section className="chat-panel" aria-label="UBUBIKO SMART AI chat">
+      <header className="chat-head"><span><strong>UBUBIKO SMART AI</strong><small>{lang==="rw"?"Umufasha w'ababyeyi":"Parent support assistant"}</small></span><button onClick={()=>setOpen(false)} aria-label="Close chat">×</button></header>
+      <div className="chat-messages"><div className="chat-bubble assistant">{welcome}</div>{messages.map((m,i)=><div key={i} className={"chat-bubble "+m.role}>{m.content}</div>)}{sending&&<div className="chat-bubble assistant typing">•••</div>}</div>
+      <form className="chat-form" onSubmit={e=>{e.preventDefault();void send();}}><input value={input} onChange={e=>setInput(e.target.value)} placeholder={lang==="rw"?"Andika ubutumwa...":"Type your message..."} maxLength={1000}/><button disabled={sending||!input.trim()}>{sending?"…":"➤"}</button></form>
+    </section>}
+    <button className="chat-launch" onClick={()=>setOpen(!open)} aria-label="Open AI chat">{open?"×":"✦"}<span>{lang==="rw"?"Ubufasha":"AI Help"}</span></button>
+  </div>;
+}
+
 
 export default function App() {
   const [lang,setLang] = useState<Language>("rw");
@@ -132,5 +164,6 @@ export default function App() {
       </section>
     </main>
     <footer><span className="footer-brand">UBUBIKO <i>SMART</i></span><span>{t.footer}</span></footer>
+    <ParentChat lang={lang}/>
   </div>;
 }
