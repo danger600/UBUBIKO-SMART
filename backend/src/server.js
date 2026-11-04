@@ -5,6 +5,7 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 import authRoutes, { auth, roles } from "./auth.js";
 import { pool } from "./db.js";
+import moduleRoutes from "./modules.js";
 
 dotenv.config();
 const app = express();
@@ -30,6 +31,7 @@ app.get("/api/health", asyncRoute(async (_req, res) => {
   res.json({ status: "ok", database: "connected" });
 }));
 app.use("/api/auth", authRoutes);
+app.use("/api", moduleRoutes);
 
 app.get("/api/categories", auth, asyncRoute(async (_req, res) => {
   const [rows] = await pool.query("SELECT id, name FROM categories ORDER BY name");
@@ -139,6 +141,7 @@ app.post("/api/stock/requests/:id/decision", auth, roles("ADMIN", "STOCK_MANAGER
 
 app.use((error, _req, res, _next) => {
   console.error("[api]", error.code || error.message);
+  if (error.status) return res.status(error.status).json({ message: error.message });
   if (error.code === "ER_DUP_ENTRY") return res.status(409).json({ message: "SKU cyangwa email isanzwe ikoreshwa." });
   if (error.message === "Origin not allowed by CORS") return res.status(403).json({ message: "Origin not allowed." });
   res.status(500).json({ message: "Habaye ikibazo kuri server. Ongera ugerageze." });
