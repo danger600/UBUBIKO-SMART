@@ -1,36 +1,136 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Boxes, LayoutDashboard, Package, ClipboardCheck, Truck, Users, ShoppingCart, RotateCcw, BarChart3, UserCog, ScrollText, Bot, Languages, Moon, Sun, LogOut, RefreshCw, Plus, Search, Menu, X, AlertTriangle, TrendingUp, ArrowDownToLine, Wallet, Check, Ban, Sparkles } from "lucide-react";
-const API=(import.meta.env.VITE_API_URL||"http://localhost:5000/api").replace(/\/$/,"");
-type User={id:number;name:string;email:string;role:string};type Row=Record<string,any>;type Field={key:string;label:string;type?:string;required?:boolean;options?:{value:string|number;label:string}[]};
-const roles=["ADMIN","STOCK_MANAGER","CASHIER","STOREKEEPER"];
-const nav=[{id:"dashboard",label:"Incamake",en:"Dashboard",icon:LayoutDashboard,roles},{id:"products",label:"Ibicuruzwa",en:"Products",icon:Package,roles},{id:"stock",label:"Stock & ibyifuzo",en:"Stock requests",icon:ClipboardCheck,roles},{id:"suppliers",label:"Abatanga ibicuruzwa",en:"Suppliers",icon:Truck,roles:["ADMIN","STOCK_MANAGER"]},{id:"customers",label:"Abakiriya",en:"Customers",icon:Users,roles},{id:"purchases",label:"Ibyaguzwe",en:"Purchases",icon:ArrowDownToLine,roles:["ADMIN","STOCK_MANAGER"]},{id:"sales",label:"Ibyagurishijwe",en:"Sales",icon:ShoppingCart,roles},{id:"returns",label:"Ibyasubijwe",en:"Returns",icon:RotateCcw,roles:["ADMIN","STOCK_MANAGER"]},{id:"reports",label:"Raporo",en:"Reports",icon:BarChart3,roles:["ADMIN","STOCK_MANAGER"]},{id:"users",label:"Abakoresha",en:"Users",icon:UserCog,roles:["ADMIN"]},{id:"audit",label:"Amateka",en:"Audit logs",icon:ScrollText,roles:["ADMIN"]},{id:"assistant",label:"UBUBIKO AI",en:"UBUBIKO AI",icon:Bot,roles}];
-const labels:Record<string,[string,string]>={dashboard:["Incamake y'ububiko","Inventory overview"],products:["Ibicuruzwa","Products"],stock:["Stock n'ibyifuzo","Stock & requests"],suppliers:["Abatanga ibicuruzwa","Suppliers"],customers:["Abakiriya","Customers"],purchases:["Ibyaguzwe","Purchases"],sales:["Ibyagurishijwe","Sales"],returns:["Ibyasubijwe","Returns"],reports:["Raporo z'ubucuruzi","Business reports"],users:["Abakoresha sisitemu","System users"],audit:["Amateka y'ibikorwa","Audit history"],assistant:["UBUBIKO AI Assistant","UBUBIKO AI Assistant"]};
-const money=(v:any)=>new Intl.NumberFormat("en-RW",{maximumFractionDigits:0}).format(Number(v)||0)+" RWF";const date=(v:any)=>v?new Date(v).toLocaleString():"—";
-export default function App(){
- const[lang,setLang]=useState<"rw"|"en">("rw"),[dark,setDark]=useState(false),[token,setToken]=useState(()=>localStorage.getItem("ub-token")||""),[user,setUser]=useState<User|null>(null),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[page,setPage]=useState("dashboard"),[rows,setRows]=useState<Row[]>([]),[summary,setSummary]=useState<Row>({}),[report,setReport]=useState<Row>({}),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false),[query,setQuery]=useState(""),[modal,setModal]=useState(false),[draft,setDraft]=useState<Row>({}),[mobile,setMobile]=useState(false);
- const rw=lang==="rw",t=(a:string,b:string)=>rw?a:b,can=(a:string[])=>!!user&&a.includes(user.role);
- const api=useCallback(async(path:string,opts:RequestInit={})=>{let r:Response;try{r=await fetch(API+path,{...opts,headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{}),...(opts.headers||{})}})}catch{throw Error(t("Server ntiboneka. Reba API URL.","Cannot reach server. Check API URL."))}const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.message||"Request failed ("+r.status+")");return d},[token,lang]);
- const load=useCallback(async(target=page)=>{if(!token||!user)return;setBusy(true);setError("");try{if(target==="dashboard"){const[s,a,m]=await Promise.all([api("/dashboard/summary"),api("/assistant/insights"),api("/reports/movements?limit=6").catch(()=>[])]);setSummary({...s,...a});setRows(m)}else if(target==="products")setRows(await api("/products"));else if(target==="stock")setRows(await api("/stock/requests"));else if(target==="suppliers")setRows(await api("/suppliers"));else if(target==="customers")setRows(await api("/customers"));else if(target==="purchases")setRows(await api("/purchases"));else if(target==="sales")setRows(await api("/sales"));else if(target==="returns")setRows(await api("/returns"));else if(target==="reports"){const[r,m]=await Promise.all([api("/reports/overview"),api("/reports/movements")]);setReport(r);setRows(m)}else if(target==="users")setRows(await api("/users"));else if(target==="audit")setRows(await api("/audit-logs"));else if(target==="assistant"){const a=await api("/assistant/insights");setSummary(a);setRows(a.suggestions||[])}}catch(e:any){setError(e.message)}finally{setBusy(false)}},[api,token,user,page]);
- useEffect(()=>{document.documentElement.dataset.theme=dark?"dark":"light"},[dark]);useEffect(()=>{if(token)api("/auth/me").then(d=>setUser(d.user)).catch(()=>{localStorage.removeItem("ub-token");setToken("");setUser(null)})},[]);useEffect(()=>{if(token&&user)load(page)},[token,user,page,load]);
- async function login(e:FormEvent){e.preventDefault();setBusy(true);setError("");try{const d=await api("/auth/login",{method:"POST",body:JSON.stringify({email,password})});localStorage.setItem("ub-token",d.token);setToken(d.token);setUser(d.user);setPassword("")}catch(e:any){setError(e.message)}finally{setBusy(false)}}
- function logout(){localStorage.removeItem("ub-token");setToken("");setUser(null);setRows([]);setPage("dashboard")}function openForm(){setDraft({});setError("");setModal(true)}function update(k:string,v:any){setDraft((d)=>({...d,[k]:v}))}
- const fields:Record<string,Field[]>={products:[{key:"name",label:t("Izina ry'igicuruzwa","Product name"),required:true},{key:"sku",label:"SKU",required:true},{key:"unit",label:t("Igipimo","Unit")},{key:"purchase_price",label:t("Igiciro cyo kugura","Purchase price"),type:"number"},{key:"selling_price",label:t("Igiciro cyo kugurisha","Selling price"),type:"number"},{key:"min_quantity",label:t("Stock ntarengwa","Minimum stock"),type:"number"}],suppliers:[{key:"name",label:t("Izina","Name"),required:true},{key:"phone",label:t("Telefoni","Phone")},{key:"email",label:"Email"},{key:"address",label:t("Aderesi","Address")}],customers:[{key:"name",label:t("Izina","Name"),required:true},{key:"phone",label:t("Telefoni","Phone")},{key:"email",label:"Email"}],stock:[{key:"product_id",label:"Product ID",type:"number",required:true},{key:"movement_type",label:t("Igikorwa","Movement"),options:[{value:"IN",label:"IN"},{value:"OUT",label:"OUT"}]},{key:"quantity",label:t("Ingano","Quantity"),type:"number",required:true},{key:"reason",label:t("Impamvu","Reason")}],purchases:[{key:"supplier_id",label:"Supplier ID (optional)",type:"number"},{key:"product_id",label:"Product ID",type:"number",required:true},{key:"quantity",label:t("Ingano","Quantity"),type:"number",required:true},{key:"unit_cost",label:t("Igiciro cyo kugura","Unit cost"),type:"number",required:true},{key:"notes",label:t("Ibisobanuro","Notes")}],sales:[{key:"customer_id",label:"Customer ID (optional)",type:"number"},{key:"product_id",label:"Product ID",type:"number",required:true},{key:"quantity",label:t("Ingano","Quantity"),type:"number",required:true},{key:"unit_price",label:t("Igiciro kimwe","Unit price"),type:"number"},{key:"notes",label:t("Ibisobanuro","Notes")}],returns:[{key:"sale_id",label:"Sale ID",type:"number",required:true},{key:"sale_item_id",label:"Sale item ID",type:"number",required:true},{key:"quantity",label:t("Ingano isubijwe","Return quantity"),type:"number",required:true},{key:"reason",label:t("Impamvu","Reason")}],users:[{key:"name",label:t("Izina","Name"),required:true},{key:"email",label:"Email",required:true},{key:"password",label:t("Ijambo ry'ibanga (inyuguti 10+)","Password (10+ characters)"),type:"password",required:true},{key:"role",label:t("Uruhare","Role"),options:roles.map(r=>({value:r,label:r}))}]};
- async function create(e:FormEvent){e.preventDefault();setBusy(true);setError("");setNotice("");try{let path="",body:Row={...draft};if(page==="products")path="/products";if(page==="suppliers")path="/suppliers";if(page==="customers")path="/customers";if(page==="stock")path="/stock/requests";if(page==="users")path="/users";if(page==="purchases"){path="/purchases";body={supplier_id:body.supplier_id||null,notes:body.notes,items:[{product_id:Number(body.product_id),quantity:Number(body.quantity),unit_cost:Number(body.unit_cost)}]}}if(page==="sales"){path="/sales";body={customer_id:body.customer_id||null,notes:body.notes,items:[{product_id:Number(body.product_id),quantity:Number(body.quantity),...(body.unit_price!==""&&body.unit_price!==undefined?{unit_price:Number(body.unit_price)}:{})}]}}if(page==="returns"){path="/returns";body={sale_id:Number(body.sale_id),reason:body.reason,items:[{sale_item_id:Number(body.sale_item_id),quantity:Number(body.quantity)}]}}await api(path,{method:"POST",body:JSON.stringify(body)});setModal(false);setNotice(t("Byabitswe neza.","Saved successfully."));await load(page)}catch(e:any){setError(e.message)}finally{setBusy(false)}}
- async function decide(id:number,decision:"APPROVED"|"REJECTED"){const comment=window.prompt(t("Andika igitekerezo (optional)","Review comment (optional)"))||"";try{await api("/stock/requests/"+id+"/decision",{method:"POST",body:JSON.stringify({decision,comment})});setNotice(t("Icyemezo cyabitswe.","Decision saved."));load("stock")}catch(e:any){setError(e.message)}}
- async function toggleUser(r:Row){try{await api("/users/"+r.id+"/status",{method:"PATCH",body:JSON.stringify({active:!r.active})});load("users")}catch(e:any){setError(e.message)}}
- const visibleRows=useMemo(()=>rows.filter(r=>JSON.stringify(r).toLowerCase().includes(query.toLowerCase())),[rows,query]);
- const title=labels[page]?.[rw?0:1]||"UBUBIKO SMART",addable=["products","suppliers","customers","stock","purchases","sales","returns","users"].includes(page);
- const columns:Record<string,string[]>={products:["name","sku","category_name","stock_quantity","purchase_price","selling_price","min_quantity"],stock:["id","product_name","movement_type","quantity","status","requested_by_name","created_at"],suppliers:["name","phone","email","address"],customers:["name","phone","email"],purchases:["reference_no","supplier_name","total_amount","status","created_by_name","created_at"],sales:["receipt_no","customer_name","total_amount","status","created_by_name","created_at"],returns:["reference_no","return_type","sale_id","total_amount","reason","created_by_name","created_at"],reports:["product_name","sku","movement_type","quantity","reference","created_by_name","created_at"],users:["name","email","role","active","created_at"],audit:["user_name","action","entity","entity_id","created_at"]};
- const names:Record<string,string>={name:t("Izina","Name"),sku:"SKU",category_name:t("Icyiciro","Category"),stock_quantity:t("Stock","Stock"),purchase_price:t("Igiciro cyo kugura","Cost"),selling_price:t("Igiciro cyo kugurisha","Price"),min_quantity:t("Stock ntarengwa","Minimum"),id:"ID",product_name:t("Igicuruzwa","Product"),movement_type:t("Igikorwa","Movement"),quantity:t("Ingano","Quantity"),status:t("Imiterere","Status"),requested_by_name:t("Wasabye","Requested by"),created_at:t("Itariki","Date"),phone:t("Telefoni","Phone"),email:"Email",address:t("Aderesi","Address"),reference_no:"Reference",supplier_name:"Supplier",total_amount:t("Igiteranyo","Total"),created_by_name:t("Byakozwe na","Created by"),receipt_no:"Receipt",customer_name:"Customer",return_type:t("Ubwoko","Type"),sale_id:"Sale ID",reason:t("Impamvu","Reason"),user_name:t("Umukoresha","User"),action:t("Igikorwa","Action"),entity:"Entity",entity_id:"Entity ID",role:t("Uruhare","Role"),active:t("Akora","Active"),reference:"Reference"};
- if(!token||!user)return <main className="login"><form onSubmit={login} className="loginbox"><div className="logo"><Boxes size={32}/></div><small>UBUBIKO SMART</small><h1>{t("Murakaza neza","Welcome back")}</h1><p>{t("Injira ucunge ububiko bwawe","Sign in to manage your inventory")}</p><label>{t("Imeyili","Email")}<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="username"/></label><label>{t("Ijambo ry'ibanga","Password")}<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="current-password"/></label>{error&&<p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy?t("Tegereza...","Please wait..."):t("Injira","Sign in")}</button></form></main>;
- return <div className="layout"><aside className={mobile?"sidebar open":"sidebar"}><div className="brand"><div className="brand-mark"><Boxes/></div><div><b>UBUBIKO <i>SMART</i></b><small>INVENTORY MANAGEMENT</small></div><button className="close-nav" onClick={()=>setMobile(false)}><X/></button></div><div className="nav-caption">{t("IBIKORWA BY'INGENZI","WORKSPACE")}</div>{nav.filter(n=>n.roles.includes(user.role)).map(n=><button key={n.id} className={page===n.id?"nav-item active":"nav-item"} onClick={()=>{setPage(n.id);setMobile(false);setQuery("");setNotice("")}}><n.icon size={18}/><span>{t(n.label,n.en)}</span>{n.id==="stock"&&summary.pendingApprovals>0&&<em>{summary.pendingApprovals}</em>}</button>)}<div className="side-bottom"><div className="user-chip"><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div><div><b>{user.name}</b><small>{user.role}</small></div></div><button className="nav-item" onClick={logout}><LogOut size={18}/>{t("Sohoka","Sign out")}</button></div></aside>
- <main className="main"><header className="topbar"><button className="menu-btn" onClick={()=>setMobile(true)}><Menu/></button><div className="page-heading"><small>SISTEMU Y'IMICUNGIRE Y'UBUBIKO</small><h1>{title}</h1></div><div className="tools"><button onClick={()=>setLang(rw?"en":"rw")}><Languages size={17}/>{rw?"RW":"EN"}</button><button onClick={()=>setDark(!dark)}>{dark?<Sun size={17}/>:<Moon size={17}/>}</button><button onClick={()=>load(page)}><RefreshCw size={17}/></button></div></header>
- {error&&<div className="alert error"><AlertTriangle size={17}/>{error}<button onClick={()=>setError("")}><X size={16}/></button></div>}{notice&&<div className="alert success"><Check size={17}/>{notice}<button onClick={()=>setNotice("")}><X size={16}/></button></div>}
- {page==="dashboard"&&<><section className="welcome"><div><small>UBUBIKO SMART · LIVE DATA</small><h2>{t("Muraho","Hello")}, {user.name.split(" ")[0]}! 👋</h2><p>{t("Dore uko ububiko buhagaze uyu munsi.","Here is your live inventory overview today.")}</p></div><div className="welcome-icon"><Boxes size={48}/></div></section><section className="stats-grid"><article><div className="stat-icon blue"><Package/></div><span>{t("Ibicuruzwa","Registered products")}</span><b>{summary.products??0}</b><small>{t("Ibicuruzwa bikora","Active products")}</small></article><article><div className="stat-icon gold"><Wallet/></div><span>{t("Ibyagurishijwe uyu munsi","Sales today")}</span><b>{money(summary.todaySales)}</b><small>{t("Amakuru yo muri database","Live database total")}</small></article><article><div className="stat-icon amber"><AlertTriangle/></div><span>{t("Stock iri hasi","Low stock")}</span><b>{summary.lowStock??0}</b><small>{t("Bisaba kongera stock","Needs replenishment")}</small></article><article><div className="stat-icon violet"><ClipboardCheck/></div><span>{t("Ibyemezo bitegereje","Pending approvals")}</span><b>{summary.pendingApprovals??0}</b><small>{t("Ibyifuzo bya stock","Stock requests")}</small></article></section><div className="dashboard-grid"><section className="panel"><div className="panel-head"><div><h2>{t("Ibikorwa biheruka","Recent movements")}</h2><p>{t("Ibikorwa byabitswe muri sisitemu","Latest recorded inventory activity")}</p></div><button className="text-btn" onClick={()=>setPage("reports")}>{t("Reba byose","View all")}</button></div><DataTable rows={rows} columns={["created_at","product_name","movement_type","quantity"]} names={{created_at:t("Itariki","Date"),product_name:t("Igicuruzwa","Product"),movement_type:t("Igikorwa","Action"),quantity:t("Ingano","Quantity")}} empty={t("Nta bikorwa biraboneka.","No movements found.")}/></section><section className="panel"><div className="panel-head"><div><h2>{t("UBUBIKO AI Insights","UBUBIKO AI Insights")}</h2><p>{t("Isesengura ry'ububiko","Inventory analysis")}</p></div><Sparkles size={20}/></div><div className="insight"><AlertTriangle/><div><b>{summary.lowStock??0} {t("bicuruza biri hasi","low-stock products")}</b><small>{t("Suzuma ibicuruzwa bisaba kongerwa.","Review replenishment suggestions.")}</small></div></div><div className="insight"><TrendingUp/><div><b>{money(summary.todaySales)}</b><small>{t("Ibyagurishijwe uyu munsi","Sales recorded today")}</small></div></div><button className="secondary full" onClick={()=>setPage("assistant")}>{t("Fungura UBUBIKO AI","Open UBUBIKO AI")}</button></section></div></>}
- {page==="reports"&&<><section className="stats-grid report-stats">{[["Sales",report.sales],["Purchases",report.purchases],["Gross profit",report.grossProfit],["Inventory value",report.inventoryValue]].map(([k,v])=><article key={String(k)}><span>{k}</span><b>{money(v)}</b><small>{t("Uku kwezi","This month / current")}</small></article>)}</section><DataTable rows={visibleRows} columns={columns.reports} names={names} empty={t("Nta makuru ya raporo.","No report data.")}/></>}
- {page==="assistant"&&<section className="assistant-panel"><div className="assistant-title"><div className="ai-mark"><Bot/></div><div><h2>UBUBIKO AI</h2><p>{t("Umufasha usesengura amakuru ari muri database yawe.","Your inventory data insights assistant.")}</p></div><span className="live-dot">LIVE DATA</span></div><div className="ai-intro"><h3>{t("Nakugirira iki uyu munsi?","How can I help today?")}</h3><p>{t("Nasesenguye amakuru ari muri sisitemu. Dore iby'ingenzi n'inama zo kongera stock.","I have analyzed live data. Here are key metrics and replenishment suggestions.")}</p></div><div className="ai-metrics"><div><small>{t("Ibicuruzwa","Products")}</small><b>{summary.products??0}</b></div><div><small>{t("Stock iri hasi","Low stock")}</small><b>{summary.lowStock??0}</b></div><div><small>{t("Ibyagurishijwe uyu munsi","Today's sales")}</small><b>{money(summary.todaySales)}</b></div><div><small>{t("Ibyemezo bitegereje","Pending approvals")}</small><b>{summary.pendingApprovals??0}</b></div></div><h3>{t("Inama zo kongera stock","Reorder suggestions")}</h3><DataTable rows={rows} columns={["name","sku","stock_quantity","min_quantity","suggested_reorder"]} names={{name:t("Igicuruzwa","Product"),sku:"SKU",stock_quantity:t("Stock ihari","Current stock"),min_quantity:t("Ntarengwa","Minimum"),suggested_reorder:t("Ingano yo kongera","Suggested reorder")}} empty={t("Nta bicuruzwa biri hasi.","No low-stock items.")}/><p className="muted-note">{t("Iyi verisiyo itanga isesengura rishingiye ku mibare iri muri database; ntabwo ari generative AI chat ihuza na LLM.","This version provides database-backed analytics; it is not yet a generative LLM chat integration.")}</p></section>}
- {page!=="dashboard"&&page!=="reports"&&page!=="assistant"&&<section className="panel table-panel"><div className="panel-head"><div><h2>{title}</h2><p>{t("Genzura kandi ucunge amakuru yawe","Manage your records")}</p></div><div className="table-actions"><label className="search"><Search size={16}/><input placeholder={t("Shakisha...","Search...")} value={query} onChange={e=>setQuery(e.target.value)}/></label>{addable&&<button className="primary small" onClick={openForm}><Plus size={16}/>{t("Ongeraho","Add new")}</button>}</div></div>{page==="stock"&&<div className="info-strip">{t("Ibyifuzo bya stock bihindura stock ari uko byemejwe na Admin cyangwa Stock Manager.","Stock requests affect inventory only after Admin or Stock Manager approval.")}</div>}<DataTable rows={visibleRows} columns={columns[page]||[]} names={names} empty={t("Nta makuru araboneka.","No records found.")} actions={page==="stock"&&can(["ADMIN","STOCK_MANAGER"])?(r)=><><button className="icon-action approve" title="Approve" onClick={()=>decide(r.id,"APPROVED")}><Check size={16}/></button><button className="icon-action reject" title="Reject" onClick={()=>decide(r.id,"REJECTED")}><Ban size={16}/></button></>:page==="users"&&can(["ADMIN"])?(r)=><button className="secondary tiny" onClick={()=>toggleUser(r)}>{r.active?t("Funga","Disable"):t("Fungura","Enable")}</button>:undefined}/></section>}
- <footer>Developed by <b>Danger Team | L5 SOD Finalist</b> · In collaboration with <b>Danger</b> · UBUBIKO SMART</footer></main>
- {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(false)}}><form className="modal" onSubmit={create}><div className="modal-head"><h2>{t("Ongeraho amakuru","Add record")}</h2><button type="button" onClick={()=>setModal(false)}><X/></button></div><div className="form-grid">{(fields[page]||[]).map(f=><label key={f.key}>{f.label}{f.options?<select required={f.required} value={draft[f.key]??f.options[0]?.value??""} onChange={e=>update(f.key,e.target.value)}>{f.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>:<input type={f.type||"text"} required={f.required} min={f.type==="number"?0:undefined} step={f.type==="number"?"any":undefined} value={draft[f.key]??""} onChange={e=>update(f.key,e.target.value)}/>}</label>)}</div><div className="modal-foot"><button type="button" className="secondary" onClick={()=>setModal(false)}>{t("Hagarika","Cancel")}</button><button className="primary" disabled={busy}>{busy?t("Birabikwa...","Saving..."):t("Bika","Save")}</button></div></form></div>}</div>
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Boxes, CheckCircle2, Languages, Package, RefreshCw, Search, Wifi, WifiOff } from "lucide-react";
+
+const API = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/$/, "");
+type Product = { id:number; name:string; sku:string; unit:string; category_name:string|null; min_quantity:number; stock_quantity:number };
+type Summary = { products:number; lowStock:number; outOfStock:number; healthyStock:number };
+type Language = "rw" | "en";
+const copy = {
+  rw: {
+    eyebrow:"UBUBIKO SMART · AMAKURU Y'UBUBIKO", title:"Murakaza neza kuri UBUBIKO SMART",
+    subtitle:"Reba ibicuruzwa bihari n'uko ububiko buhagaze.", overview:"Incamake y'ububiko",
+    products:"Ibicuruzwa byose", low:"Stock iri hasi", out:"Byashize", healthy:"Bihari neza",
+    catalogue:"Urutonde rw'ibicuruzwa", catalogueSub:"Shakisha igicuruzwa cyangwa uhitemo icyiciro.",
+    search:"Shakisha izina cyangwa SKU...", all:"Ibyiciro byose", available:"Kirahari",
+    lowLabel:"Kiri hafi gushira", outLabel:"Cyashize", empty:"Nta bicuruzwa bibonetse.",
+    loading:"Turimo kuzana amakuru...", refresh:"Kongera kuvugurura", online:"Database iri gukora",
+    offline:"Ntibishobotse kugera kuri database", footer:"Amakuru agaragazwa ava muri sisitemu y'ububiko.",
+    noCategory:"Nta cyiciro", retry:"Ongera ugerageze"
+  },
+  en: {
+    eyebrow:"UBUBIKO SMART · INVENTORY INFORMATION", title:"Welcome to UBUBIKO SMART",
+    subtitle:"Explore available products and check current stock levels.", overview:"Inventory overview",
+    products:"Total products", low:"Low stock", out:"Out of stock", healthy:"In stock",
+    catalogue:"Product catalogue", catalogueSub:"Search for a product or filter by category.",
+    search:"Search name or SKU...", all:"All categories", available:"Available",
+    lowLabel:"Low stock", outLabel:"Out of stock", empty:"No products found.",
+    loading:"Loading inventory...", refresh:"Refresh data", online:"Database connected",
+    offline:"Unable to reach the database", footer:"Information shown is provided by the inventory system.",
+    noCategory:"Uncategorised", retry:"Try again"
+  }
+};
+const emptySummary:Summary = {products:0,lowStock:0,outOfStock:0,healthyStock:0};
+
+export default function App() {
+  const [lang,setLang] = useState<Language>("rw");
+  const [products,setProducts] = useState<Product[]>([]);
+  const [summary,setSummary] = useState<Summary>(emptySummary);
+  const [query,setQuery] = useState("");
+  const [category,setCategory] = useState("all");
+  const [loading,setLoading] = useState(true);
+  const [online,setOnline] = useState(false);
+  const [error,setError] = useState("");
+  const t = copy[lang];
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [summaryResponse,productsResponse] = await Promise.all([
+        fetch(API + "/public/summary"),
+        fetch(API + "/public/products")
+      ]);
+      if (!summaryResponse.ok || !productsResponse.ok) throw new Error("API request failed");
+      const [summaryData,productData] = await Promise.all([summaryResponse.json(),productsResponse.json()]);
+      setSummary({
+        products:Number(summaryData.products)||0,
+        lowStock:Number(summaryData.lowStock)||0,
+        outOfStock:Number(summaryData.outOfStock)||0,
+        healthyStock:Number(summaryData.healthyStock)||0
+      });
+      setProducts(Array.isArray(productData)?productData:[]);
+      setOnline(true);
+    } catch {
+      setOnline(false);
+      setError(lang==="rw"?"Seriveri ntibonetse. Reba ko backend iri gukora.":"The server is unavailable. Check that the backend is running.");
+    } finally {
+      setLoading(false);
+    }
+  },[lang]);
+
+  useEffect(()=>{ void load(); },[load]);
+
+  const categories = useMemo(()=>Array.from(new Set(products.map(p=>p.category_name || t.noCategory))),[products,t.noCategory]);
+  const filtered = useMemo(()=>products.filter(p=>{
+    const matchesQuery = (p.name+" "+p.sku).toLowerCase().includes(query.toLowerCase());
+    const matchesCategory = category==="all" || (p.category_name || t.noCategory)===category;
+    return matchesQuery && matchesCategory;
+  }),[products,query,category,t.noCategory]);
+
+  const status = (p:Product) => Number(p.stock_quantity)<=0 ? "out" : Number(p.stock_quantity)<=Number(p.min_quantity) ? "low" : "healthy";
+
+  return <div className="portal">
+    <header className="topbar">
+      <a className="brand" href="#" aria-label="UBUBIKO SMART home">
+        <span className="brand-icon"><Boxes size={25}/></span>
+        <span><strong>UBUBIKO <i>SMART</i></strong><small>INVENTORY PORTAL</small></span>
+      </a>
+      <div className="top-actions">
+        <span className={online?"connection online":"connection offline"}>{online?<Wifi size={15}/>:<WifiOff size={15}/>}<span>{online?t.online:t.offline}</span></span>
+        <button className="language" onClick={()=>setLang(lang==="rw"?"en":"rw")}><Languages size={17}/>{lang==="rw"?"EN":"RW"}</button>
+        <button className="refresh" onClick={()=>void load()} disabled={loading} aria-label={t.refresh}><RefreshCw size={17}/></button>
+      </div>
+    </header>
+
+    <main>
+      <section className="hero">
+        <div className="hero-copy">
+          <span className="eyebrow">{t.eyebrow}</span>
+          <h1>{t.title}</h1>
+          <p>{t.subtitle}</p>
+          <a className="hero-link" href="#catalogue">{t.catalogue} <span>↘</span></a>
+        </div>
+        <div className="hero-art"><div className="art-ring ring-one"/><div className="art-ring ring-two"/><div className="art-box"><Boxes size={82} strokeWidth={1.1}/></div><span className="gold-dot dot-one"/><span className="gold-dot dot-two"/></div>
+      </section>
+
+      <section className="overview">
+        <div className="section-heading"><div><span className="eyebrow">{t.eyebrow}</span><h2>{t.overview}</h2></div><span className="live-tag"><span/> LIVE</span></div>
+        <div className="stats">
+          <article className="stat-card"><span className="stat-icon"><Package/></span><small>{t.products}</small><strong>{loading?"—":summary.products}</strong></article>
+          <article className="stat-card"><span className="stat-icon warning"><AlertTriangle/></span><small>{t.low}</small><strong>{loading?"—":summary.lowStock}</strong></article>
+          <article className="stat-card"><span className="stat-icon danger"><AlertTriangle/></span><small>{t.out}</small><strong>{loading?"—":summary.outOfStock}</strong></article>
+          <article className="stat-card"><span className="stat-icon success"><CheckCircle2/></span><small>{t.healthy}</small><strong>{loading?"—":summary.healthyStock}</strong></article>
+        </div>
+      </section>
+
+      <section className="catalogue" id="catalogue">
+        <div className="catalogue-heading"><div><span className="eyebrow">UBUBIKO SMART</span><h2>{t.catalogue}</h2><p>{t.catalogueSub}</p></div><span className="result-count">{filtered.length} / {products.length}</span></div>
+        <div className="filters">
+          <label className="search-box"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search}/></label>
+          <select value={category} onChange={e=>setCategory(e.target.value)} aria-label={t.all}><option value="all">{t.all}</option>{categories.map(c=><option key={c} value={c}>{c}</option>)}</select>
+        </div>
+        {error&&<div className="error-state"><WifiOff size={22}/><p>{error}</p><button onClick={()=>void load()}>{t.retry}</button></div>}
+        {loading&&!products.length?<div className="loading-state"><span className="spinner"/>{t.loading}</div>:!filtered.length?<div className="empty-state">{t.empty}</div>:<div className="product-grid">
+          {filtered.map(p=><article className="product-card" key={p.id}>
+            <div className="product-top"><span className="product-icon"><Package size={23}/></span><span className={"stock-pill "+status(p)}>{status(p)==="out"?t.outLabel:status(p)==="low"?t.lowLabel:t.available}</span></div>
+            <span className="product-category">{p.category_name||t.noCategory}</span>
+            <h3>{p.name}</h3>
+            <div className="product-meta"><span>{p.sku}</span><span>{p.unit}</span></div>
+            <div className="stock-line"><span>{t.healthy}</span><strong>{Number(p.stock_quantity)||0}</strong></div>
+          </article>)}
+        </div>}
+      </section>
+    </main>
+    <footer><span className="footer-brand">UBUBIKO <i>SMART</i></span><span>{t.footer}</span></footer>
+  </div>;
 }
-function DataTable({rows,columns,names,empty,actions}:{rows:Row[];columns:string[];names:Record<string,string>;empty:string;actions?:(row:Row)=>any}){return <div className="table-wrap"><table><thead><tr>{columns.map(c=><th key={c}>{names[c]||c}</th>)}{actions&&<th>Actions</th>}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={r.id??i}>{columns.map(c=><td key={c}>{c==="created_at"?date(r[c]):["purchase_price","selling_price","total_amount"].includes(c)?money(r[c]):c==="active"?(r[c]?"Active":"Disabled"):r[c]??"—"}</td>)}{actions&&<td><div className="row-actions">{actions(r)}</div></td>}</tr>):<tr><td colSpan={columns.length+(actions?1:0)} className="empty">{empty}</td></tr>}</tbody></table></div>}
