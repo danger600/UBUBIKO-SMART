@@ -34,6 +34,34 @@ app.get("/api/health", asyncRoute(async (_req, res) => {
 
 const publicReadLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false });
 app.use("/api/public", publicReadLimiter);
+app.post("/api/public/chat", asyncRoute(async (req, res) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return res.status(503).json({ message: "AI assistant not configured." });
+  const message = typeof req.body?.message === "string" ? req.body.message.trim().slice(0, 1000) : "";
+  if (!message) return res.status(400).json({ message: "Message is required." });
+  const history = Array.isArray(req.body?.history) ? req.body.history.slice(-8).filter(item =>
+    item && ["user", "assistant"].includes(item.role) && typeof item.content === "string"
+  ).map(item => ({ role: item.role, content: item.content.slice(0, 1000) })) : [];
+  const messages = [
+    { role: "system", content: "You are UBUBIKO SMART's helpful parent-facing inventory information assistant. Answer clearly and politely in the language the user uses, especially Kinyarwanda or English. You may explain how to use the public product catalogue and interpret stock labels. You do not have access to live database records, private accounts, prices, suppliers, credentials, or administrator actions. Never claim to have checked live stock or changed any records. For exact availability, direct the user to the public catalogue or school/store staff. Never request passwords, payment information, or personal sensitive data. Keep replies concise." },
+    ...history,
+    { role: "user", content: message }
+  ];
+  const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", messages, temperature: 0.4, max_tokens: 350 })
+  });
+  if (!upstream.ok) {
+    console.error("[ai-chat] Provider returned", upstream.status);
+    return res.status(502).json({ message: "AI assistant is temporarily unavailable." });
+  }
+  const data = await upstream.json();
+  const reply = data.choices?.[0]?.message?.content;
+  if (typeof reply !== "string" || !reply.trim()) return res.status(502).json({ message: "AI assistant returned an empty response." });
+  res.json({ reply: reply.trim() });
+}));
+
 
 // Public parent portal: read-only inventory information. Never return prices, users, suppliers or audit data.
 app.get("/api/public/summary", asyncRoute(async (_req, res) => {
