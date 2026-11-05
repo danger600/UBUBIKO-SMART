@@ -1,13 +1,13 @@
-# Deploy the frontend preview to Vercel
+# Vercel deployment
 
-This repository includes a standalone local-data preview at `/preview.html`. It is built alongside the existing React application; the existing homepage remains unchanged.
+The standalone, local-data inventory preview is available at `/preview.html` and is also served at `/` as the default homepage. The existing React app remains part of the build at its own HTML entry point.
 
 ## Configure Vercel
 
-1. Import `danger600/UBUBIKO-SMART` into your Vercel account (or open its existing project).
-2. If the project is configured to build from the repository root, keep the root directory as `.`. The repository-level `vercel.json` installs and builds `frontend` and publishes `frontend/dist`.
-3. If the Vercel project instead has its Root Directory set to `frontend`, remove/override those root-level build settings in the Vercel dashboard and set the output directory to `dist`. The Vite configuration will still emit `preview.html` as a second page.
-4. Merge `feature/ububiko-standalone-frontend` into the branch Vercel deploys, or enable a preview deployment for this branch. Assign `ububiko-smart.vercel.app` to the production deployment in Vercel's Domains settings.
-5. After deployment, open `https://ububiko-smart.vercel.app/preview.html` to view the standalone preview.
+1. Import `danger600/UBUBIKO-SMART` into your Vercel account or open its existing project.
+2. Set the project Root Directory to the repository root (`.`). The root `vercel.json` installs and builds the frontend and publishes `frontend/dist`.
+3. Deploy `feature/ububiko-standalone-frontend` as a Preview deployment to test, or merge it to the branch configured for Production.
+4. In Vercel's Domains settings, ensure `ububiko-smart.vercel.app` is assigned to the Production deployment.
+5. After deployment, visit `https://ububiko-smart.vercel.app/`. The preview also remains available at `https://ububiko-smart.vercel.app/preview.html`.
 
-The preview stores sample data in each visitor's browser and does not connect to the backend. A Git push alone cannot deploy to Vercel unless this repository is linked to a Vercel project with the necessary account permissions.
+The preview saves sample data in the visitor's browser and is not connected to the backend. A Git push alone cannot deploy to Vercel unless the repository is linked to a Vercel project and automatic deployments are enabled. If the Vercel project is configured with Root Directory `frontend`, align its dashboard build/output settings with the root `vercel.json` configuration or reset the Root Directory to `.`.
